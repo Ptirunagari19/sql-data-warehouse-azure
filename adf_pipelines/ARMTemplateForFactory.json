@@ -1,0 +1,1475 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory name",
+            "defaultValue": "adf-sales-dwh-pranusha"
+        },
+        "Is_blob_landing_connectionString": {
+            "type": "secureString",
+            "metadata": "Secure string for 'connectionString' of 'Is_blob_landing'"
+        },
+        "ls_azure_sql_dwh_properties_typeProperties_server": {
+            "type": "string",
+            "defaultValue": "pranusha-dwh-sql.database.windows.net"
+        },
+        "ls_azure_sql_dwh_properties_typeProperties_database": {
+            "type": "string",
+            "defaultValue": "sql_dwh"
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/Is_blob_landing')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureBlobStorage",
+                "typeProperties": {
+                    "connectionString": "[parameters('Is_blob_landing_connectionString')]"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ls_azure_sql_dwh')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureSqlDatabase",
+                "typeProperties": {
+                    "server": "[parameters('ls_azure_sql_dwh_properties_typeProperties_server')]",
+                    "database": "[parameters('ls_azure_sql_dwh_properties_typeProperties_database')]",
+                    "encrypt": "mandatory",
+                    "trustServerCertificate": false,
+                    "authenticationType": "SystemAssignedManagedIdentity"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/pl_sales_dwh_full_load_copy1')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "sp_load_silver",
+                        "type": "SqlServerStoredProcedure",
+                        "dependsOn": [
+                            {
+                                "activity": "cp_crm_cust_info_to_bronze",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            {
+                                "activity": "cp_crm_prd_info_to_bronze",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            {
+                                "activity": "cp_crm_sales_to_bronze",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            {
+                                "activity": "cp_erp_cust_to_bronze",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            {
+                                "activity": "cp_erp_loc_to_bronze",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            {
+                                "activity": "cp_erp_product_category_to_bronze",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "storedProcedureName": "[[silver].[load_silver]"
+                        },
+                        "linkedServiceName": {
+                            "referenceName": "ls_azure_sql_dwh",
+                            "type": "LinkedServiceReference"
+                        }
+                    },
+                    {
+                        "name": "cp_crm_cust_info_to_bronze",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "DelimitedTextSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobStorageReadSettings",
+                                    "recursive": true,
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mappings": [
+                                    {
+                                        "source": {
+                                            "name": "cst_id",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cst_id",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "cst_key",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cst_key",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "cst_firstname",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cst_firstname",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "cst_lastname",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cst_lastname",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "cst_marital_status",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cst_marital_status",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "cst_gndr",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cst_gndr",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "cst_create_date",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cst_create_date",
+                                            "type": "Date",
+                                            "physicalType": "date"
+                                        }
+                                    }
+                                ],
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_blob_crm_cust_info",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_sql_bronze_crm_cust_info",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "cp_crm_prd_info_to_bronze",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "DelimitedTextSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobStorageReadSettings",
+                                    "recursive": true,
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mappings": [
+                                    {
+                                        "source": {
+                                            "name": "prd_id",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "prd_id",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "prd_key",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "prd_key",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "prd_nm",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "prd_nm",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "prd_cost",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "prd_cost",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "prd_line",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "prd_line",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "prd_start_dt",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "prd_start_dt",
+                                            "type": "DateTime",
+                                            "physicalType": "datetime"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "prd_end_dt",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "prd_end_dt",
+                                            "type": "DateTime",
+                                            "physicalType": "datetime"
+                                        }
+                                    }
+                                ],
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_blob_crm_prd_info",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_sql_bronze_crm_prd_info",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "cp_crm_sales_to_bronze",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "DelimitedTextSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobStorageReadSettings",
+                                    "recursive": true,
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mappings": [
+                                    {
+                                        "source": {
+                                            "name": "sls_ord_num",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_ord_num",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_prd_key",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_prd_key",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_cust_id",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_cust_id",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_order_dt",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_order_dt",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_ship_dt",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_ship_dt",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_due_dt",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_due_dt",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_sales",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_sales",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_quantity",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_quantity",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "sls_price",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "sls_price",
+                                            "type": "Int32",
+                                            "physicalType": "int"
+                                        }
+                                    }
+                                ],
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_blob_crm_sales_details",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_sql_bronze_crm_sales_details",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "cp_erp_cust_to_bronze",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "DelimitedTextSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobStorageReadSettings",
+                                    "recursive": true,
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mappings": [
+                                    {
+                                        "source": {
+                                            "name": "CID",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cid",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "BDATE",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "bdate",
+                                            "type": "Date",
+                                            "physicalType": "date"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "GEN",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "gen",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    }
+                                ],
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_blob_erp_cust_az12",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_sql_bronze_erp_cust_az12",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "cp_erp_loc_to_bronze",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "DelimitedTextSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobStorageReadSettings",
+                                    "recursive": true,
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mappings": [
+                                    {
+                                        "source": {
+                                            "name": "CID",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cid",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "CNTRY",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cntry",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    }
+                                ],
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_blob_erp_loc_a101",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_sql_bronze_erp_loc_a101",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    },
+                    {
+                        "name": "cp_erp_product_category_to_bronze",
+                        "type": "Copy",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "DelimitedTextSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobStorageReadSettings",
+                                    "recursive": true,
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "DelimitedTextReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "AzureSqlSink",
+                                "writeBehavior": "insert",
+                                "sqlWriterUseTableLock": false
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "mappings": [
+                                    {
+                                        "source": {
+                                            "name": "ID",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "id",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "CAT",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "cat",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "SUBCAT",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "subcat",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    },
+                                    {
+                                        "source": {
+                                            "name": "MAINTENANCE",
+                                            "type": "String",
+                                            "physicalType": "String"
+                                        },
+                                        "sink": {
+                                            "name": "maintenance",
+                                            "type": "String",
+                                            "physicalType": "nvarchar"
+                                        }
+                                    }
+                                ],
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_blob_erp_px_cat_g1v2",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_sql_bronze_erp_px_cat_g1v2",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            }
+                        ]
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_azure_sql_dwh')]",
+                "[concat(variables('factoryId'), '/datasets/ds_blob_crm_cust_info')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_bronze_crm_cust_info')]",
+                "[concat(variables('factoryId'), '/datasets/ds_blob_crm_prd_info')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_bronze_crm_prd_info')]",
+                "[concat(variables('factoryId'), '/datasets/ds_blob_crm_sales_details')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_bronze_crm_sales_details')]",
+                "[concat(variables('factoryId'), '/datasets/ds_blob_erp_cust_az12')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_bronze_erp_cust_az12')]",
+                "[concat(variables('factoryId'), '/datasets/ds_blob_erp_loc_a101')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_bronze_erp_loc_a101')]",
+                "[concat(variables('factoryId'), '/datasets/ds_blob_erp_px_cat_g1v2')]",
+                "[concat(variables('factoryId'), '/datasets/ds_sql_bronze_erp_px_cat_g1v2')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_blob_erp_px_cat_g1v2')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "Is_blob_landing",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "PX_CAT_G1V2.csv",
+                        "folderPath": "source_erp",
+                        "container": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "ID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "CAT",
+                        "type": "String"
+                    },
+                    {
+                        "name": "SUBCAT",
+                        "type": "String"
+                    },
+                    {
+                        "name": "MAINTENANCE",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/Is_blob_landing')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_blob_erp_loc_a101')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "Is_blob_landing",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "LOC_A101.csv",
+                        "folderPath": "source_erp",
+                        "container": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "CID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "CNTRY",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/Is_blob_landing')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_blob_crm_sales_details')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "Is_blob_landing",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "sales_details.csv",
+                        "folderPath": "source_crm",
+                        "container": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "sls_ord_num",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_prd_key",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_cust_id",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_order_dt",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_ship_dt",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_due_dt",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_sales",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_quantity",
+                        "type": "String"
+                    },
+                    {
+                        "name": "sls_price",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/Is_blob_landing')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_blob_erp_cust_az12')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "Is_blob_landing",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "CUST_AZ12.csv",
+                        "folderPath": "source_erp",
+                        "container": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "CID",
+                        "type": "String"
+                    },
+                    {
+                        "name": "BDATE",
+                        "type": "String"
+                    },
+                    {
+                        "name": "GEN",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/Is_blob_landing')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_blob_crm_cust_info')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "Is_blob_landing",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "cust_info.csv",
+                        "folderPath": "source_crm",
+                        "container": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "cst_id",
+                        "type": "String"
+                    },
+                    {
+                        "name": "cst_key",
+                        "type": "String"
+                    },
+                    {
+                        "name": "cst_firstname",
+                        "type": "String"
+                    },
+                    {
+                        "name": "cst_lastname",
+                        "type": "String"
+                    },
+                    {
+                        "name": "cst_marital_status",
+                        "type": "String"
+                    },
+                    {
+                        "name": "cst_gndr",
+                        "type": "String"
+                    },
+                    {
+                        "name": "cst_create_date",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/Is_blob_landing')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_bronze_crm_cust_info')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_azure_sql_dwh",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "cst_id",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "cst_key",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "cst_firstname",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "cst_lastname",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "cst_marital_status",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "cst_gndr",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "cst_create_date",
+                        "type": "date"
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "bronze",
+                    "table": "crm_cust_info"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_azure_sql_dwh')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_bronze_erp_px_cat_g1v2')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_azure_sql_dwh",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "id",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "cat",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "subcat",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "maintenance",
+                        "type": "nvarchar"
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "bronze",
+                    "table": "erp_px_cat_g1v2"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_azure_sql_dwh')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_bronze_erp_loc_a101')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_azure_sql_dwh",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "cid",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "cntry",
+                        "type": "nvarchar"
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "bronze",
+                    "table": "erp_loc_a101"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_azure_sql_dwh')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_bronze_crm_sales_details')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_azure_sql_dwh",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "sls_ord_num",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "sls_prd_key",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "sls_cust_id",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sls_order_dt",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sls_ship_dt",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sls_due_dt",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sls_sales",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sls_quantity",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "sls_price",
+                        "type": "int",
+                        "precision": 10
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "bronze",
+                    "table": "crm_sales_details"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_azure_sql_dwh')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_bronze_erp_cust_az12')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_azure_sql_dwh",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "cid",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "bdate",
+                        "type": "date"
+                    },
+                    {
+                        "name": "gen",
+                        "type": "nvarchar"
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "bronze",
+                    "table": "erp_cust_az12"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_azure_sql_dwh')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_blob_crm_prd_info')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "Is_blob_landing",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "prd_info.csv",
+                        "folderPath": "source_crm",
+                        "container": "landing"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "prd_id",
+                        "type": "String"
+                    },
+                    {
+                        "name": "prd_key",
+                        "type": "String"
+                    },
+                    {
+                        "name": "prd_nm",
+                        "type": "String"
+                    },
+                    {
+                        "name": "prd_cost",
+                        "type": "String"
+                    },
+                    {
+                        "name": "prd_line",
+                        "type": "String"
+                    },
+                    {
+                        "name": "prd_start_dt",
+                        "type": "String"
+                    },
+                    {
+                        "name": "prd_end_dt",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/Is_blob_landing')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sql_bronze_crm_prd_info')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_azure_sql_dwh",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "prd_id",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "prd_key",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "prd_nm",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "prd_cost",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "prd_line",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "prd_start_dt",
+                        "type": "datetime",
+                        "precision": 23,
+                        "scale": 3
+                    },
+                    {
+                        "name": "prd_end_dt",
+                        "type": "datetime",
+                        "precision": 23,
+                        "scale": 3
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "bronze",
+                    "table": "crm_prd_info"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_azure_sql_dwh')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/trigger1')]",
+            "type": "Microsoft.DataFactory/factories/triggers",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "runtimeState": "Started",
+                "pipelines": [
+                    {
+                        "pipelineReference": {
+                            "referenceName": "pl_sales_dwh_full_load_copy1",
+                            "type": "PipelineReference"
+                        },
+                        "parameters": {}
+                    }
+                ],
+                "type": "ScheduleTrigger",
+                "typeProperties": {
+                    "recurrence": {
+                        "frequency": "Hour",
+                        "interval": 24,
+                        "startTime": "2026-09-17T09:46:00",
+                        "timeZone": "India Standard Time"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/pipelines/pl_sales_dwh_full_load_copy1')]"
+            ]
+        }
+    ]
+}
