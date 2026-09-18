@@ -105,5 +105,5 @@ Gold views refresh automatically on query — no ADF step required.
 ## 👩‍💻 Author
 
 **Pranusha Tirunagari**  
-Senior Data Engineer | Azure • Databricks • Synapse • Power BI  
+Data Engineer | Azure • Databricks • Synapse • Power BI  
 📍 [LinkedIn](https://www.linkedin.com/in/pranusha-tirunagari-a583a63a8/) | [GitHub](https://github.com/Ptirunagari19)
